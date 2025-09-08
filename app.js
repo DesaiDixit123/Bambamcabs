@@ -1,0 +1,54 @@
+const dotenv = require('dotenv').config();
+const cors = require('cors');
+var createError = require('http-errors');
+var express = require('express');
+var path = require('path');
+var cookieParser = require('cookie-parser');
+var logger = require('morgan');
+let mongoose = require("mongoose");
+const CommonRouter = require('./routes/vendors/common');
+var app = express();
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
+app.use(logger('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(cors());
+mongoose.set('runValidators', true);
+mongoose.connect(process.env.MONGO_URI, {});
+mongoose.connection.once('open', () => {
+  console.log("Well done! , connected with mongoDB database");
+}).on('error', error => {
+  console.log("Oops! database connection error:" + error);
+});
+const adminpaths = [
+  { pathUrl: '/', routeFile: 'login' },
+  { pathUrl: '/role', routeFile: 'role' },
+  { pathUrl: '/user', routeFile: 'adminuser' },
+];
+const vendorpaths = [
+  { pathUrl: '/common', routeFile: 'common' },
+  { pathUrl: '/partener', routeFile: 'partener' },
+  { pathUrl: '/', routeFile: 'vendorRegister' },
+];
+adminpaths.forEach((path) => {
+  app.use('/admin' + path.pathUrl, require('./routes/admin/' + path.routeFile));
+});
+vendorpaths.forEach((path) => {
+
+  app.use('/vendor' + path.pathUrl, require('./routes/vendors/' + path.routeFile));
+});
+
+
+app.use(function (req, res, next) {
+  next(createError(404));
+});
+app.use(function (err, req, res, next) {
+  res.locals.message = err.message;
+  res.locals.error = req.app.get('env') === 'development' ? err : {};
+  res.status(err.status || 500);
+  res.render('error');
+});
+module.exports = app;

@@ -1,0 +1,17 @@
+const express = require('express');
+const router = express.Router();
+const helper = require('../../utilities/helper');
+const saveroleCtrl = require('../../controllers/admins/role/save');
+const rolelistCtrl = require('../../controllers/admins/role/list');
+const getoneroleCtrl = require('../../controllers/admins/role/getone');
+const getpermissionCtrl = require('../../controllers/admins/role/getpermission');
+const changeroleStatus = require('../../controllers/admins/role/change');
+const removeroleCtrl = require('../../controllers/admins/role/remove');
+router.post('/save', helper.authenticateToken, saveroleCtrl.saveroles);
+router.post('/', helper.authenticateToken, rolelistCtrl.withOutPagination);
+router.post('/list', helper.authenticateToken, rolelistCtrl.withPagination);
+router.post('/getone', helper.authenticateToken, getoneroleCtrl.getoneroles);
+router.post('/change', helper.authenticateToken, changeroleStatus.changeroleStatus);
+router.post('/remove', helper.authenticateToken, removeroleCtrl.removeroles);
+router.get('/getpermission', helper.authenticateToken, getpermissionCtrl.getpermission);
+module.exports = router;

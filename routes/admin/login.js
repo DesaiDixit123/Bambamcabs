@@ -1,0 +1,11 @@
+var express = require('express');
+var router = express.Router();
+const adminloginCtrl = require('../../controllers/admins/auth/login');
+const verifyotpCtrl = require('../../controllers/admins/auth/verification');
+const setpasswordCtrl = require('../../controllers/admins/auth/setpassword');
+const forgetpasswordCtrl = require('../../controllers/admins/auth/forgetpassword');
+router.post('/login', adminloginCtrl.login);
+router.post('/verifyotp', verifyotpCtrl.verificationotp);
+router.post('/setpassword', setpasswordCtrl.setpassword);
+router.post('/forgetpassword', forgetpasswordCtrl.forgetpassword);
+module.exports = router;
