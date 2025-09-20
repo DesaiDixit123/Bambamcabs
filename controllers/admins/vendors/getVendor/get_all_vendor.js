@@ -77,7 +77,7 @@ exports.getAllVendorsWithPagination = async (req, res) => {
   }
 };
 
-
+// ✅ Company Vendors API with Search
 exports.getCompanyVendorsWithPagination = async (req, res) => {
   try {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
@@ -88,8 +88,10 @@ exports.getCompanyVendorsWithPagination = async (req, res) => {
     page = parseInt(page) || 1;
     limit = parseInt(limit) || 10;
 
-    // Search filter
-    let query = { register_type: "company" }; // only company
+    // Base filter
+    let query = { register_type: "company" };
+
+    // ✅ Search filter
     if (search) {
       const searchRegex = new RegExp(search, "i");
       query.$or = [
@@ -119,6 +121,7 @@ exports.getCompanyVendorsWithPagination = async (req, res) => {
 };
 
 
+// ✅ Individual Vendors API with Search
 exports.getIndividualVendorsWithPagination = async (req, res) => {
   try {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
@@ -129,8 +132,10 @@ exports.getIndividualVendorsWithPagination = async (req, res) => {
     page = parseInt(page) || 1;
     limit = parseInt(limit) || 10;
 
-    // Search filter
-    let query = { register_type: "individual" }; // only individual
+    // Base filter
+    let query = { register_type: "individual" };
+
+    // ✅ Search filter
     if (search) {
       const searchRegex = new RegExp(search, "i");
       query.$or = [
@@ -163,7 +168,7 @@ exports.getOneVendor = async (req, res) => {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
     res.setHeader("Access-Control-Allow-Origin", "*");
 
-    const { id } = req.params; // vendor ID from URL
+    const { id } = req.params; // vendor ID from URL params
 
     if (!id) {
       return responseManager.onError("Vendor ID is required", res);

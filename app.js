@@ -32,13 +32,35 @@ const vendorpaths = [
   { pathUrl: '/common', routeFile: 'common' },
   { pathUrl: '/partener', routeFile: 'partener' },
   { pathUrl: '/', routeFile: 'vendorRegister' },
+  { pathUrl: '/driver', routeFile: 'driver' },
+  { pathUrl: '/vehicles', routeFile: 'vehicles' },
+
 ];
+const MasterPaths = [
+  { pathUrl: '/fueltype', routeFile: 'fueltype' },
+  { pathUrl: '/vehicletype', routeFile: 'vehicletype' },
+  { pathUrl: '/language', routeFile: 'language' },
+  { pathUrl: '/penalty', routeFile: 'penalty' },
+  { pathUrl: '/special-service', routeFile: 'SpecialService' },
+  { pathUrl: '/tax', routeFile: 'tax' },
+  { pathUrl: '/payment', routeFile: 'payment' },
+  { pathUrl: '/deposit', routeFile: 'deposit' },
+  { pathUrl: '/blog', routeFile: 'blog' },
+  { pathUrl: '/privacy-policy', routeFile: 'privacy_policy' },
+  { pathUrl: '/offer', routeFile: 'Offer' },
+  { pathUrl: '/invoice', routeFile: 'invoice' },
+];
+
 adminpaths.forEach((path) => {
   app.use('/admin' + path.pathUrl, require('./routes/admin/' + path.routeFile));
 });
 vendorpaths.forEach((path) => {
 
   app.use('/vendor' + path.pathUrl, require('./routes/vendors/' + path.routeFile));
+});
+MasterPaths.forEach((path) => {
+
+  app.use('/master' + path.pathUrl, require('./routes/masters/' + path.routeFile));
 });
 
 

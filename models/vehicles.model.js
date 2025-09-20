@@ -1,118 +1,160 @@
 let mongoose = require('mongoose');
 let mongoosePaginate = require('mongoose-paginate-v2');
+
 let schema = new mongoose.Schema({
-    vendor_id : {
+    vendor_id: {
         type: mongoose.Types.ObjectId,
-        require: true
+        required: true,
+        ref: "vendors"
     },
-    car_photo : {
-        type: String,
-        require: true
-    },
-    brand_name : {
-        type: String,
-        require: true
-    },
-    vehicale_type : {
+    admin_id: {
         type: mongoose.Types.ObjectId,
-        require: true
+        ref: "admins",
+        default: null
     },
-    vehicale_number : {
+    car_photo: {
         type: String,
-        require: true
+        required: true
     },
-    fuel_type : {
+    brand_name: {
+        type: String,
+        required: true
+    },
+    vehicle_type: {
         type: mongoose.Types.ObjectId,
-        require: true
+        required: true,
+        ref: "vehicletypes"
     },
-    vehicle_make_year : {
+    vehicle_number: {
         type: String,
-        require : true
+        required: true,
+        unique: true
     },
-    sourcing : {
+    fuel_type: [
+        {
+            type: mongoose.Types.ObjectId,
+            ref: "fueltypes",
+            required: true
+        }
+    ],
+
+    vehicle_make_year: {
         type: String,
-        require : true
+        required: true
     },
-    pet_friendly : {
+
+
+    // Preferences
+    sourcing: {
+        type: String,
+        required: true
+    },
+    pet_friendly: {
         type: String,
         enum: ['Yes', 'No'],
         default: 'No'
     },
-    luggage_carrier : {
+    luggage_carrier: {
         type: String,
         enum: ['Yes', 'No'],
         default: 'No'
     },
-    working_rear_seat_belts : {
+    working_rear_seat_belts: {
         type: String,
         enum: ['Yes', 'No'],
         default: 'No'
     },
-    insurance_expiry : {
+
+    // Documents
+    insurance_expiry: {
         type: String,
-        require : true
+        required: true
     },
-    fitness_expiry : {
+    fitness_expiry: {
         type: String,
-        require : true
+        required: true
     },
-    permit_expiry : {
+    permit_expiry: {
         type: String,
-        require : true
+        required: true
     },
-    permit_type : {
-        type : String,
-        require : true
+    permit_type: {
+        type: String,
+        required: true
     },
-    insurance_document : {
-        type : String,
-        require : true
+    insurance_document: {
+        type: String,
+        required: true
     },
-    fitness_document : {
-        type : String,
-        require : true
+    fitness_document: {
+        type: String,
+        required: true
     },
-    permit_document : {
-        type : String,
-        require : true
+    permit_document: {
+        type: String,
+        required: true
     },
-    puc_document : {
-        type : String,
-        require : true
+    puc_document: {
+        type: String,
+        required: true
     },
-    rc_image : {
-        type : String,
-        require : true
+    rc_image: {
+        type: String,
+        required: true
     },
-    status : {
-        type : Boolean,
-        default : false
+
+    include_facilities: [
+        {
+            logo: { type: String },
+            description: { type: String, default: "" }
+        }
+    ],
+    exclude_facilities: [
+        {
+            logo: { type: String },
+            description: { type: String, default: "" }
+        }
+    ],
+    vehicles_features: [
+        {
+            logo: { type: String },
+            description: { type: String, default: "" }
+        }
+    ],
+    terms_conditions: {
+        type: String,
+        required: false, // optional rakhiye
+        default: ""
     },
-    approval_status : { 
+    status: {
+        type: Boolean,
+        default: false
+    },
+    approval_status: {
         type: String,
         enum: ['pending', 'approved', 'rejected'],
         default: 'pending'
     },
-    approve_reject_by : {
-        type: mongoose.Types.ObjectId,
-        require: true
-    },
+    approve_reject_by: { type: mongoose.Types.ObjectId },
+
     createdBy: {
         type: mongoose.Types.ObjectId,
-        require: true
+        required: true
     },
     updatedBy: {
         type: mongoose.Types.ObjectId,
-        require: true
+        required: true
     },
     createAtTimestamp: {
         type: Number,
-        require: true
+        required: true
     },
     updateAtTimestamp: {
         type: Number,
-        require: true
+        required: true
     }
+
 }, { timestamps: true, strict: false, autoIndex: true });
+
 schema.plugin(mongoosePaginate);
-module.exports = schema;
+module.exports = mongoose.model('vehicles', schema);

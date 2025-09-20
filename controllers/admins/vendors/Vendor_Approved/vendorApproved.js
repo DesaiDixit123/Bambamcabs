@@ -50,11 +50,11 @@ exports.vendorApproved = async (req, res) => {
         let toEmail = vendorData.company_email || vendorData.owner_email;
 
         if (toEmail) {
-         let mailDetails = {
-  from: process.env.EMAIL,
-  to: toEmail,
-  subject: "🎉 Congratulations! Your Vendor Account is Approved",
-  text: `Dear ${vendorData.owner_name},
+            let mailDetails = {
+                from: process.env.EMAIL,
+                to: toEmail,
+                subject: "🎉 Congratulations! Your Vendor Account is Approved",
+                text: `Dear ${vendorData.owner_name},
 
 We are pleased to inform you that your vendor account has been successfully approved. 🎊
 
@@ -66,7 +66,7 @@ Welcome aboard, and we look forward to a great partnership ahead!
 
 Best regards,  
 Bambam Cabs Team`
-};
+            };
 
 
             mailTransporter.sendMail(mailDetails, function (error) {

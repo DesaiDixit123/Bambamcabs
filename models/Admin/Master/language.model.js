@@ -1,30 +1,37 @@
 let mongoose = require('mongoose');
 let mongoosePaginate = require('mongoose-paginate-v2');
+
 let schema = new mongoose.Schema({
-    name : {
+    name: {
         type: String,
-        require: true
+        required: true
     },
-    status : {
-        type : Boolean,
-        default : false
+    status: {
+        type: Boolean,
+        default: false
+    },
+    admin_id: {
+        type: mongoose.Types.ObjectId,
+        default: null
     },
     createdBy: {
         type: mongoose.Types.ObjectId,
-        require: true
+        required: true
     },
     updatedBy: {
         type: mongoose.Types.ObjectId,
-        require: true
+        required: true
     },
     createAtTimestamp: {
         type: Number,
-        require: true
+        required: true
     },
     updateAtTimestamp: {
         type: Number,
-        require: true
+        required: true
     }
 }, { timestamps: true, strict: false, autoIndex: true });
+
 schema.plugin(mongoosePaginate);
-module.exports = schema;
+
+module.exports = mongoose.model('languages', schema);

@@ -2,6 +2,7 @@ const _ = require("lodash");
 const constants = require('./constants');
 const mongoConnection = require('./connections');
 var roleModel = require('../models/roles.model');
+
 let adminCollections = [
     { text: 'Admins', value: 'admins' },
     { text: 'Role & Permissions', value: 'roles' },
@@ -25,45 +26,28 @@ let adminCollections = [
     { text: 'Gallery Medias', value: 'gallerymedias' },
     { text: 'Home Medias', value: 'homemedias' },
     { text: 'Rooms', value: 'rooms' },
-    { text : 'Amenities Services', value: 'amenitiesservices' },
-    { text : 'Amenities Categories', value: 'amenitycategories' },
-    { text : 'Users', value: 'users' },
-    { text : 'Open Positions', value: 'openpositions' },
-    { text : 'Applied Positions', value: 'appliedpositions' },
-    { text : 'AMC Settings', value: 'amcsettings' },
-    { text : 'Member AMC', value: 'memberamcs' },
+    { text: 'Amenities Services', value: 'amenitiesservices' },
+    { text: 'Amenities Categories', value: 'amenitycategories' },
+    { text: 'Users', value: 'users' },
+    { text: 'Open Positions', value: 'openpositions' },
+    { text: 'Applied Positions', value: 'appliedpositions' },
+    { text: 'AMC Settings', value: 'amcsettings' },
+    { text: 'Member AMC', value: 'memberamcs' },
+    { text: 'Drivers', value: 'drivers' } ,  // 👈 drivers add
+     { text: 'Vehicle', value: 'vehiclestypes' }
 ];
+
 async function getPermission(roleID, modelName, permissionType) {
     let primary = mongoConnection.useDb(constants.DEFAULT_DB);
     let result = await primary.model(constants.MODELS.roles, roleModel).findById(roleID).lean();
     if (result && result.status && result.status == true) {
-        let finalpermission = [];
-        finalpermission = _.filter(result.permissions, { 'collectionName': modelName });
-        if (finalpermission.length == 1) {
-            if (permissionType == "view") {
-                if (finalpermission[0].view == true)
-                    return true;
-                else
-                    return false;
-            }
-            if (permissionType == "insert") {
-                if (finalpermission[0].insert == true)
-                    return true;
-                else
-                    return false;
-            }
-            if (permissionType == "update") {
-                if (finalpermission[0].update == true)
-                    return true;
-                else
-                    return false;
-            }
-            if (permissionType == "delete") {
-                if (finalpermission[0].delete == true)
-                    return true;
-                else
-                    return false;
-            }
+        let finalpermission = _.filter(result.permissions, { 'collectionName': modelName });
+        if (finalpermission.length === 1) {
+            let perm = finalpermission[0];
+            if (permissionType === "view") return perm.view === true;
+            if (permissionType === "insert") return perm.insert === true;
+            if (permissionType === "update") return perm.update === true;
+            if (permissionType === "delete") return perm.delete === true;
             return false;
         } else {
             return false;
@@ -72,4 +56,5 @@ async function getPermission(roleID, modelName, permissionType) {
         return false;
     }
 };
+
 module.exports = { getPermission, adminCollections };

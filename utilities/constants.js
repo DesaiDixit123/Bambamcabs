@@ -6,7 +6,7 @@ let constants = {
         vendors : 'vendors',
         drivers : 'drivers',
         vehicles : 'vehicles',
-        vehicale_types : 'vehicale_types',
+        vehicletypes : 'vehicletypes',
         panelties : 'panelties',
         trips : 'trips',
     }
