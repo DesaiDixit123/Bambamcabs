@@ -62,6 +62,15 @@ let schema = new mongoose.Schema({
         type: mongoose.Types.ObjectId,
         require: true
     },
+    otp: {
+    type: String,
+    default: null
+},
+otp_expiry: {
+    type: Number, // store as timestamp (ms)
+    default: null
+}
+,
     updatedBy: {
         type: mongoose.Types.ObjectId,
         require: true

@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const helper = require("../../utilities/helper");
 const multer = require("../../utilities/multer.functions");
-const { addDriver } = require("../../controllers/admins/drivers/adddrivers");
+const { addDriver, driverLogin } = require("../../controllers/admins/drivers/adddrivers");
 
 
 router.post(
@@ -13,6 +13,9 @@ router.post(
   ]),
   addDriver
 );
+
+
+router.post("/login",driverLogin)
 
 
 module.exports = router;

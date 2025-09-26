@@ -256,3 +256,127 @@ exports.addDriver = async (req, res) => {
         return responseManager.onError(err, res);
     }
 };
+
+
+exports.driverLogin = async (req, res) => {
+    try {
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+
+        const { driver_mobile } = req.body;
+
+        // ===== Validation =====
+        if (!driver_mobile || !/^[0-9]{10}$/.test(driver_mobile)) {
+            return responseManager.badrequest(
+                { message: "Invalid driver mobile number" },
+                res
+            );
+        }
+
+        // ===== Check Driver Exists =====
+        const existingDriver = await driverModel.findOne({ driver_mobile }).lean();
+        if (!existingDriver) {
+            return responseManager.badrequest(
+                { message: "Driver with this mobile number not found" },
+                res
+            );
+        }
+
+        // ===== Generate Random 6 digit OTP =====
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // ===== Set Expiry (1 min = 60,000 ms) =====
+        const expiryTime = Date.now() + 60 * 1000;
+
+        // ===== Store OTP & Expiry in DB =====
+        await driverModel.findByIdAndUpdate(existingDriver._id, {
+            $set: {
+                otp: otp,
+                otp_expiry: expiryTime,
+                updateAtTimestamp: Date.now()
+            }
+        });
+
+        return responseManager.onSuccess(
+            "OTP sent successfully",
+            { driver_mobile, otp, validTill: new Date(expiryTime) },
+            res
+        );
+    } catch (err) {
+        return responseManager.onError(err, res);
+    }
+};
+
+
+exports.verifyOtp = async (req, res) => {
+    try {
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+
+        const { driver_mobile, otp } = req.body;
+
+        // ===== Validation =====
+        if (!driver_mobile || !/^[0-9]{10}$/.test(driver_mobile)) {
+            return responseManager.badrequest(
+                { message: "Invalid driver mobile number" },
+                res
+            );
+        }
+        if (!otp || otp.trim().length !== 6) {
+            return responseManager.badrequest(
+                { message: "Invalid OTP" },
+                res
+            );
+        }
+
+        // ===== Find Driver =====
+        const driverData = await driverModel.findOne({ driver_mobile }).lean();
+        if (!driverData) {
+            return responseManager.badrequest(
+                { message: "Driver not found" },
+                res
+            );
+        }
+
+        // ===== Check OTP & Expiry =====
+        if (!driverData.otp || !driverData.otp_expiry) {
+            return responseManager.badrequest(
+                { message: "OTP not generated. Please request again." },
+                res
+            );
+        }
+
+        if (driverData.otp !== otp) {
+            return responseManager.badrequest(
+                { message: "Invalid OTP" },
+                res
+            );
+        }
+
+        if (Date.now() > driverData.otp_expiry) {
+            return responseManager.badrequest(
+                { message: "OTP expired. Please request again." },
+                res
+            );
+        }
+
+        // ===== Clear OTP after success =====
+        await driverModel.findByIdAndUpdate(driverData._id, {
+            $unset: { otp: 1, otp_expiry: 1 },
+            $set: { updateAtTimestamp: Date.now(), lastLogin: Date.now() }
+        });
+
+        return responseManager.onSuccess(
+            "OTP verified successfully",
+            {
+                driver_id: driverData._id,
+                driver_name: driverData.driver_name,
+                driver_mobile: driverData.driver_mobile,
+                status: driverData.status,
+            },
+            res
+        );
+    } catch (err) {
+        return responseManager.onError(err, res);
+    }
+};
