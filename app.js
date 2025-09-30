@@ -34,6 +34,7 @@ const vendorpaths = [
   { pathUrl: '/', routeFile: 'vendorRegister' },
   { pathUrl: '/driver', routeFile: 'driver' },
   { pathUrl: '/vehicles', routeFile: 'vehicles' },
+  { pathUrl: '/trips', routeFile: 'trips' },
 
 ];
 const MasterPaths = [
