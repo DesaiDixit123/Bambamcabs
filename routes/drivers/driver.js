@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const helper = require("../../utilities/helper");
 const multer = require("../../utilities/multer.functions");
-const { addDriver, driverLogin } = require("../../controllers/admins/drivers/adddrivers");
+const { addDriver, driverLogin } = require("../../controllers/Drivers/drivers.controller");
 
 
 router.post(

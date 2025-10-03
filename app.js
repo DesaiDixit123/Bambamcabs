@@ -32,7 +32,7 @@ const vendorpaths = [
   { pathUrl: '/common', routeFile: 'common' },
   { pathUrl: '/partener', routeFile: 'partener' },
   { pathUrl: '/', routeFile: 'vendorRegister' },
-  { pathUrl: '/driver', routeFile: 'driver' },
+
   { pathUrl: '/vehicles', routeFile: 'vehicles' },
   { pathUrl: '/trips', routeFile: 'trips' },
 
@@ -52,6 +52,15 @@ const MasterPaths = [
   { pathUrl: '/invoice', routeFile: 'invoice' },
 ];
 
+const DriverPaths = [
+  { pathUrl: '/', routeFile: 'driver' },
+ 
+];
+const UserPaths = [
+  { pathUrl: '/', routeFile: 'user' },
+ 
+];
+
 adminpaths.forEach((path) => {
   app.use('/admin' + path.pathUrl, require('./routes/admin/' + path.routeFile));
 });
@@ -64,6 +73,14 @@ MasterPaths.forEach((path) => {
   app.use('/master' + path.pathUrl, require('./routes/masters/' + path.routeFile));
 });
 
+DriverPaths.forEach((path) => {
+
+  app.use('/driver' + path.pathUrl, require('./routes/drivers/' + path.routeFile));
+});
+UserPaths.forEach((path) => {
+
+  app.use('/user' + path.pathUrl, require('./routes/users/' + path.routeFile));
+});
 
 app.use(function (req, res, next) {
   next(createError(404));

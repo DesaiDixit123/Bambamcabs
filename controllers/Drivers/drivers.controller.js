@@ -1,8 +1,8 @@
-const responseManager = require("../../../utilities/response.manager");
+const responseManager = require("../../utilities/response.manager");
 const mongoose = require("mongoose");
-const AwsCloud = require("../../../utilities/aws");
-const driverModel = require("../../../models/drivers.model");
-const vendorModel = require("../../../models/vendors.model");
+const AwsCloud = require("../../utilities/aws");
+const driverModel = require("../../models/drivers.model");
+const vendorModel = require("../../models/vendors.model");
 
 exports.addDriver = async (req, res) => {
     try {
