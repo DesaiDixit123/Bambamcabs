@@ -4,6 +4,7 @@ const helper = require("../../utilities/helper");
 const multer = require("../../utilities/multer.functions");
 const UserController = require("../../controllers/Users/users.controller");
 const verifyUser = require("../../controllers/Users/verifyUser");
+const {  explorweCabsGetAvailableVehicles, createBooking, getVehiclesOffers, applyOffer, getAllSpecialServices, selectVehicle } = require("../../controllers/Users/booking.controller");
 
 
 
@@ -34,7 +35,14 @@ router.post(
 );
 
 router.get("/profile",verifyUser,UserController.getProfile)
+router.post("/apply/offer",verifyUser,applyOffer)
+router.post("/select-vehicle",verifyUser,selectVehicle)
+router.get("/get-vehicles-offers",verifyUser,getVehiclesOffers)
+router.get("/special-services",verifyUser,getAllSpecialServices)
 router.post("/logout",verifyUser,UserController.logout)
+router.post("/explore-cab",verifyUser,explorweCabsGetAvailableVehicles)
+router.post("/create-booking",verifyUser,createBooking)
+
 router.post(
   "/google-signup",
 
