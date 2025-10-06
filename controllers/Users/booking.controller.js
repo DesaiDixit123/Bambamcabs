@@ -9,92 +9,148 @@ const User = require('../../models/User/user.model'); // user model
 const SpecialServices = require("../../models/Admin/Master/Special_Services.model"); // tamaro model path
 const ExploreCabs = require("../../models/User/exploreCabs.model");
 
-  exports.explorweCabsGetAvailableVehicles = async (req, res) => {
-    try {
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
-      res.setHeader("Access-Control-Allow-Origin", "*");
+exports.explorweCabsGetAvailableVehicles = async (req, res) => {
+  try {
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    res.setHeader("Access-Control-Allow-Origin", "*");
 
-      // 🔒 User authentication check
-      if (!(req.user && mongoose.Types.ObjectId.isValid(req.user._id))) {
-        return responseManager.unauthorisedRequest(res);
-      }
-
-      const { from, to, pickup_date, pickup_time, trip_type, city } = req.body;
-
-      /** ===== Validations ===== **/
-      if (!trip_type)
-        return responseManager.badrequest({ message: "Trip type is required" }, res);
-
-      if ((trip_type === "Oneway" || trip_type === "Round Trip") && (!from || !to))
-        return responseManager.badrequest({ message: "From & To required" }, res);
-
-      if (trip_type === "Local Rental Trip" && !city)
-        return responseManager.badrequest({ message: "City required for local rental trip" }, res);
-
-      if (!pickup_date || !pickup_time)
-        return responseManager.badrequest({ message: "Pickup date & time required" }, res);
-
-      /** ===== Build query ===== **/
-      const query = {
-        status: true,
-        trip_type: trip_type.trim(),
-      };
-
-      if (trip_type === "Oneway" || trip_type === "Round Trip") {
-        query.from = new RegExp(`^${from.trim()}$`, "i");
-        query.to = new RegExp(`^${to.trim()}$`, "i");
-      } else if (trip_type === "Local Rental Trip") {
-        query.city = new RegExp(`^${city.trim()}$`, "i");
-      }
-
-      /** ===== Find trip ===== **/
-      const trip = await Trip.findOne(query).lean();
-
-      let vehicles = [];
-      let is_result_found = false;
-
-      if (trip) {
-        if (trip.vehicleIds && trip.vehicleIds.length > 0) {
-          vehicles = await Vehicle.find({
-            vehicle_type: { $in: trip.vehicleIds },
-            status: true,
-          })
-            .populate("vehicle_type")
-            .lean();
-        }
-        is_result_found = true;
-      }
-
-      /** ===== Save explore data ===== **/
-      const exploreData = new ExploreCabs({
-        userId: req.user._id,
-        trip_type,
-        from,
-        to,
-        city,
-        pickup_date,
-        pickup_time,
-        tripId: trip ? trip._id : null,
-        totalKm: trip ? trip.totalKm : null,
-        duration: trip ? trip.duration : null,
-        vehicleIds: vehicles.map(v => v._id),
-        is_result_found,
-      });
-
-      await exploreData.save();
-
-      /** ===== Final Response ===== **/
-      return responseManager.onSuccess(
-        `${trip_type} trip ${is_result_found ? "found" : "not found"}`,
-        { trip, vehicles, exploreId: exploreData._id },
-        res
-      );
-
-    } catch (err) {
-      console.error("Error in explorweCabsGetAvailableVehicles:", err);
-      return responseManager.onError(err, res);
+    // 🔒 Authentication
+    if (!(req.user && mongoose.Types.ObjectId.isValid(req.user._id))) {
+      return responseManager.unauthorisedRequest(res);
     }
-  };
+
+    const { from, to, pickup_date, pickup_time, trip_type, city } = req.body;
+
+    /** ===== Validations ===== **/
+    if (!trip_type)
+      return responseManager.badrequest({ message: "Trip type is required" }, res);
+
+    if ((trip_type === "Oneway" || trip_type === "Round Trip") && (!from || !to))
+      return responseManager.badrequest({ message: "From & To required" }, res);
+
+    if (trip_type === "Local Rental Trip" && !city)
+      return responseManager.badrequest({ message: "City required for local rental trip" }, res);
+
+    if (!pickup_date || !pickup_time)
+      return responseManager.badrequest({ message: "Pickup date & time required" }, res);
+
+    /** ===== Build Query ===== **/
+    const query = {
+      status: true,
+      trip_type: trip_type.trim(),
+    };
+
+    if (trip_type === "Oneway" || trip_type === "Round Trip") {
+      query.from = new RegExp(`^${from.trim()}$`, "i");
+      query.to = new RegExp(`^${to.trim()}$`, "i");
+    } else if (trip_type === "Local Rental Trip") {
+      query.city = new RegExp(`^${city.trim()}$`, "i");
+    }
+
+    /** ===== Find Trip ===== **/
+    const trip = await Trip.findOne(query).lean();
+
+    let vehicles = [];
+    let is_result_found = false;
+    let final_price = 0;
+    let upto_km = null;
+
+    if (trip) {
+      console.log("✅ Trip found:", trip._id);
+
+      if (trip.vehicleIds && trip.vehicleIds.length > 0) {
+        vehicles = await Vehicle.find({
+          vehicle_type: { $in: trip.vehicleIds },
+          status: true,
+        })
+          .populate("vehicle_type")
+          .lean();
+
+        console.log("🚗 Vehicles found:", vehicles.length);
+      }
+      is_result_found = true;
+    } else {
+      console.log("⚠️ No trip found for query:", query);
+    }
+
+    /** ===== Calculate upto_km and final price ===== **/
+    if (vehicles && vehicles.length > 0 && trip?.totalKm) {
+      for (const v of vehicles) {
+        if (!v.vehicle_type?.states?.length) continue;
+
+        for (const state of v.vehicle_type.states) {
+          if (!Array.isArray(state.cities)) continue;
+
+          for (const cityData of state.cities) {
+            if (
+              cityData?.city_name &&
+              from &&
+              cityData.city_name.toLowerCase() === from.toLowerCase()
+            ) {
+              upto_km = cityData.upto_km || 0;
+
+              const fix_price = cityData.fix_price_per_day || 0;
+              const per_km_price = cityData.per_km_price || 0;
+
+              if (trip.totalKm <= upto_km) {
+                final_price = fix_price;
+              } else {
+                const extraKm = trip.totalKm - upto_km;
+                final_price = fix_price + extraKm * per_km_price;
+              }
+
+              console.log(`✅ City match: ${cityData.city_name}`);
+              console.log(`upto_km=${upto_km}, totalKm=${trip.totalKm}`);
+              console.log(`fix_price=${fix_price}, per_km_price=${per_km_price}`);
+              console.log(`💰 Final Price: ${final_price}`);
+
+              break;
+            }
+          }
+          if (upto_km) break;
+        }
+        if (upto_km) break;
+      }
+    }
+
+    if (!upto_km) {
+      console.log("❌ upto_km not found for city:", from);
+    }
+
+    /** ===== Save Explore Data ===== **/
+    const exploreData = new ExploreCabs({
+      userId: req.user._id,
+      trip_type,
+      from,
+      to,
+      city,
+      pickup_date,
+      pickup_time,
+      tripId: trip ? trip._id : null,
+      totalKm: trip ? trip.totalKm : null,
+      duration: trip ? trip.duration : null,
+      vehicleIds: vehicles.map((v) => v._id),
+      is_result_found,
+      upto_km,
+      final_price, // ✅ new field
+    });
+
+    await exploreData.save();
+    console.log("💾 ExploreCabs saved:", exploreData._id);
+
+    /** ===== Response ===== **/
+    return responseManager.onSuccess(
+      `${trip_type} trip ${is_result_found ? "found" : "not found"}`,
+      { trip, vehicles, exploreId: exploreData._id, upto_km, final_price },
+      res
+    );
+  } catch (err) {
+    console.error("🔥 Error in explorweCabsGetAvailableVehicles:", err);
+    return responseManager.onError(err, res);
+  }
+};
+
+
 
 
 
@@ -465,7 +521,7 @@ exports.createBooking = async (req, res) => {
     if (validSubTotal < 0 || validTotal < 0) {
       return responseManager.badrequest({ message: "Invalid payment values sent from frontend" }, res);
     }
-  /** ===== Generate Unique Booking ID ===== **/
+    /** ===== Generate Unique Booking ID ===== **/
     const generateBookingId = () => {
       const prefix = "BBM";
       const timestamp = Date.now().toString().slice(-6); // last 6 digits
@@ -475,7 +531,7 @@ exports.createBooking = async (req, res) => {
     /** ===== Save Booking ===== **/
     const bookingData = {
       userId: req.user._id,
-        trip_type,
+      trip_type,
       booking_id: generateBookingId(),
       from,
       to,
@@ -500,8 +556,8 @@ exports.createBooking = async (req, res) => {
       total_payment: validTotal,        // FRONTEND VALUE
       payment_mode: payment_mode || "Online",
       payment_status: "Pending",
-        booking_status: "Confirmed",
-        razorpay_payment: req.body.razorpay_payment || null
+      booking_status: "Confirmed",
+      razorpay_payment: req.body.razorpay_payment || null
     };
 
     const booking = new Booking(bookingData);

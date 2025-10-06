@@ -25,6 +25,8 @@ const exploreCabsSchema = new Schema({
   vehicleIds: [{ type: Schema.Types.ObjectId, ref: "vehicles" }], // ✅ Added this
   // 🔹 Status flags
   is_result_found: { type: Boolean, default: false },
+  upto_km: { type: Number },
+  final_price: { type: Number, default: 0 },
 
   // System
   createdAt: { type: Date, default: Date.now },
