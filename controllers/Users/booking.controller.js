@@ -12,6 +12,214 @@ const ExploreCabs = require("../../models/User/exploreCabs.model");
 const Booking = require("../../models/User/booking.model");
 
 
+// exports.explorweCabsGetAvailableVehicles = async (req, res) => {
+//   try {
+//     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+//     res.setHeader("Access-Control-Allow-Origin", "*");
+
+//     // 🔒 Authentication
+//     if (!(req.user && mongoose.Types.ObjectId.isValid(req.user._id))) {
+//       return responseManager.unauthorisedRequest(res);
+//     }
+
+//     const { from, to, pickup_date, pickup_time, trip_type, city } = req.body;
+
+//     /** ===== Validation ===== **/
+//     if (!trip_type)
+//       return responseManager.badrequest({ message: "Trip type is required" }, res);
+
+//     if ((trip_type === "Oneway" || trip_type === "Round Trip") && (!from || !to))
+//       return responseManager.badrequest({ message: "From & To required" }, res);
+
+//     if (trip_type === "Local Rental Trip" && !city)
+//       return responseManager.badrequest({ message: "City required for local rental trip" }, res);
+
+//     if (!pickup_date || !pickup_time)
+//       return responseManager.badrequest({ message: "Pickup date & time required" }, res);
+
+//     /** ===== Handle Multi-location Round Trip ===== **/
+//     let total_km_count = 0;
+
+//     if (trip_type === "Round Trip") {
+//       const apiKey = "EbB1WBtNMWSaC4nq5A6wQgudF8rp5MKHt8IZ4iQFouwtANcDhhXIkp6rDT39PkIk";
+//       const toArray = Array.isArray(to) ? to : [to]; // ensure array
+
+//       const allPoints = [from, ...toArray, from]; // return back to origin
+//       console.log("🗺️ Route Points:", allPoints);
+
+//       for (let i = 0; i < allPoints.length - 1; i++) {
+//         const origin = allPoints[i];
+//         const destination = allPoints[i + 1];
+
+//         const url = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${encodeURIComponent(
+//           origin
+//         )}&destinations=${encodeURIComponent(destination)}&key=${apiKey}`;
+
+//         const response = await axios.get(url);
+//         const element = response.data?.rows?.[0]?.elements?.[0];
+
+//         if (!element || element.status !== "OK") {
+//           console.warn(`⚠️ Distance API failed for ${origin} → ${destination}`);
+//           continue;
+//         }
+
+//         const distanceMeters = element.distance.value;
+//         const distanceKm = distanceMeters / 1000;
+//         total_km_count += distanceKm;
+
+//         console.log(`🛣️ ${origin} → ${destination} = ${distanceKm.toFixed(2)} km`);
+//       }
+
+//       total_km_count = Math.round(total_km_count);
+//       console.log(`✅ Total Round Trip Distance: ${total_km_count} km`);
+//     }
+
+//     /** ===== Build Query ===== **/
+//     const query = { status: true, trip_type: trip_type.trim() };
+
+//     if (trip_type === "Oneway" || trip_type === "Round Trip") {
+//       query.from = new RegExp(`^${from.trim()}$`, "i");
+
+//       if (Array.isArray(to) && to.length > 0) {
+//         query.$or = to.map((dest) => ({ to: new RegExp(`^${dest.trim()}$`, "i") }));
+//       } else {
+//         query.to = new RegExp(`^${to.trim()}$`, "i");
+//       }
+//     } else if (trip_type === "Local Rental Trip") {
+//       query.city = new RegExp(`^${city.trim()}$`, "i");
+//     }
+
+//     /** ===== Find Trip ===== **/
+//     const trip = await Trip.findOne(query).lean();
+//     let vehicles = [];
+//     let is_result_found = false;
+
+//     let upto_km = null;
+//     let fix_price_per_day = 0;
+//     let per_km_price = 0;
+//     let per_hour_price = 0;
+//     let final_price = 0;
+
+//     if (trip) {
+//       console.log("✅ Trip found:", trip._id);
+
+//       if (trip.vehicleIds && trip.vehicleIds.length > 0) {
+//         vehicles = await Vehicle.find({
+//           vehicle_type: { $in: trip.vehicleIds },
+//           status: true,
+//         })
+//           .populate("vehicle_type")
+//           .lean();
+
+//         console.log("🚗 Vehicles found:", vehicles.length);
+//       }
+//       is_result_found = true;
+//     } else {
+//       console.log("⚠️ No trip found for query:", query);
+//     }
+
+//     /** ===== Calculate Prices ===== **/
+//     if (vehicles.length > 0) {
+//       outerLoop: for (const v of vehicles) {
+//         if (!v.vehicle_type?.states?.length) continue;
+
+//         for (const state of v.vehicle_type.states) {
+//           if (!Array.isArray(state.cities)) continue;
+
+//           for (const cityData of state.cities) {
+//             const cityName = cityData?.city_name;
+
+//             // 🟢 Local Rental Trip Logic
+//             if (trip_type === "Local Rental Trip") {
+//               if (cityName && city && cityName.toLowerCase() === city.toLowerCase()) {
+//                 per_hour_price = cityData.per_hour_price || 0;
+//                 fix_price_per_day = cityData.fix_price_per_day || 0;
+//                 final_price = per_hour_price;
+//                 console.log(`🏙️ Local city match: ${cityName}`);
+//                 break outerLoop;
+//               }
+//             }
+
+//             // 🟢 Oneway / Round Trip Logic
+//             if (trip_type === "Oneway" || trip_type === "Round Trip") {
+//               if (cityName && from && cityName.toLowerCase() === from.toLowerCase()) {
+//                 upto_km = cityData.upto_km || 0;
+//                 fix_price_per_day = cityData.fix_price_per_day || 0;
+//                 per_km_price = cityData.per_km_price || 0;
+
+//                 const totalKmUsed =
+//                   trip_type === "Round Trip" ? total_km_count : trip?.totalKm || 0;
+
+//                 if (totalKmUsed <= upto_km) {
+//                   final_price = fix_price_per_day;
+//                 } else {
+//                   const extraKm = totalKmUsed - upto_km;
+//                   final_price = fix_price_per_day + extraKm * per_km_price;
+//                 }
+
+//                 console.log(`✅ City match: ${cityName}`);
+//                 console.log(`💰 Final Price: ${final_price}`);
+//                 break outerLoop;
+//               }
+//             }
+//           }
+//         }
+//       }
+//     }
+
+//     /** ===== Save Explore Data ===== **/
+//     const exploreData = new ExploreCabs({
+//       userId: req.user._id,
+//       trip_type,
+//       from,
+//       to: Array.isArray(to) ? to : [to],
+//       city,
+//       pickup_date,
+//       pickup_time,
+//       tripId: trip ? trip._id : null,
+//       totalKm: trip ? trip.totalKm : null,
+//       total_km_count: total_km_count || null, // ✅ for round trip
+//       duration: trip ? trip.duration : null,
+//       vehicleIds: vehicles.map((v) => v._id),
+//       is_result_found,
+//       upto_km,
+//       fix_price_per_day,
+//       per_km_price,
+//       per_hour_price,
+//       final_price,
+//     });
+
+//     await exploreData.save();
+//     console.log("💾 ExploreCabs saved successfully:", exploreData._id);
+
+//     /** ===== Response ===== **/
+//     const responseData = {
+//       trip,
+//       vehicles,
+//       exploreId: exploreData._id,
+//       total_km_count: total_km_count || 0,
+//       total_km: trip ? trip.totalKm : 0,
+//       upto_km,
+//       fix_price_per_day,
+//       per_km_price,
+//       per_hour_price,
+//       final_price,
+//     };
+
+//     return responseManager.onSuccess(
+//       `${trip_type} trip ${is_result_found ? "found" : "not found"}`,
+//       responseData,
+//       res
+//     );
+//   } catch (err) {
+//     console.error("🔥 Error in explorweCabsGetAvailableVehicles:", err);
+//     return responseManager.onError(err, res);
+//   }
+// };
+
+
+
+
 exports.explorweCabsGetAvailableVehicles = async (req, res) => {
   try {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
@@ -25,101 +233,103 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
     const { from, to, pickup_date, pickup_time, trip_type, city } = req.body;
 
     /** ===== Validation ===== **/
-    if (!trip_type)
-      return responseManager.badrequest({ message: "Trip type is required" }, res);
+    if (!trip_type) return responseManager.badrequest({ message: "Trip type is required" }, res);
 
-    if ((trip_type === "Oneway" || trip_type === "Round Trip") && (!from || !to))
+    if ((trip_type === "Oneway" || trip_type === "Round Trip") && (!from || !to)) {
       return responseManager.badrequest({ message: "From & To required" }, res);
+    }
 
-    if (trip_type === "Local Rental Trip" && !city)
+    if (trip_type === "Round Trip" && !Array.isArray(to)) {
+      return responseManager.badrequest({ message: "To must be an array for Round Trip" }, res);
+    }
+
+    if (trip_type === "Local Rental Trip" && !city) {
       return responseManager.badrequest({ message: "City required for local rental trip" }, res);
+    }
 
-    if (!pickup_date || !pickup_time)
-      return responseManager.badrequest({ message: "Pickup date & time required" }, res);
+    if (!pickup_date || !pickup_time) return responseManager.badrequest({ message: "Pickup date & time required" }, res);
 
-    /** ===== Handle Multi-location Round Trip ===== **/
+    /** ===== Find Trips ===== **/
+    let tripsFound = [];
     let total_km_count = 0;
 
-    if (trip_type === "Round Trip") {
+    if (trip_type === "Oneway") {
+      const query = { 
+        status: true, 
+        trip_type: "Oneway", 
+        from: new RegExp(`^${from.trim()}$`, "i"), 
+        to: new RegExp(`^${to.trim()}$`, "i") 
+      };
+      const trip = await Trip.findOne(query).lean();
+      if (trip) tripsFound.push(trip);
+    } else if (trip_type === "Round Trip") {
       const apiKey = "EbB1WBtNMWSaC4nq5A6wQgudF8rp5MKHt8IZ4iQFouwtANcDhhXIkp6rDT39PkIk";
-      const toArray = Array.isArray(to) ? to : [to]; // ensure array
 
-      const allPoints = [from, ...toArray, from]; // return back to origin
-      console.log("🗺️ Route Points:", allPoints);
+      for (const destination of to) {
+        const query = { 
+          status: true, 
+          trip_type: "Round Trip", 
+          from: new RegExp(`^${from.trim()}$`, "i"), 
+          to: new RegExp(`^${destination.trim()}$`, "i") 
+        };
+        const trip = await Trip.findOne(query).lean();
+        if (trip) tripsFound.push(trip);
 
-      for (let i = 0; i < allPoints.length - 1; i++) {
-        const origin = allPoints[i];
-        const destination = allPoints[i + 1];
-
-        const url = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${encodeURIComponent(
-          origin
-        )}&destinations=${encodeURIComponent(destination)}&key=${apiKey}`;
-
+        // Calculate distance for this segment
+        const url = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${encodeURIComponent(from)}&destinations=${encodeURIComponent(destination)}&key=${apiKey}`;
         const response = await axios.get(url);
         const element = response.data?.rows?.[0]?.elements?.[0];
-
-        if (!element || element.status !== "OK") {
-          console.warn(`⚠️ Distance API failed for ${origin} → ${destination}`);
-          continue;
+        if (element && element.status === "OK") {
+          total_km_count += element.distance.value / 1000;
         }
+      }
 
-        const distanceMeters = element.distance.value;
-        const distanceKm = distanceMeters / 1000;
-        total_km_count += distanceKm;
-
-        console.log(`🛣️ ${origin} → ${destination} = ${distanceKm.toFixed(2)} km`);
+      // Add return trip distance (last destination → from)
+      if (to.length > 0) {
+        const lastDestination = to[to.length - 1];
+        const urlReturn = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${encodeURIComponent(lastDestination)}&destinations=${encodeURIComponent(from)}&key=${apiKey}`;
+        const responseReturn = await axios.get(urlReturn);
+        const elementReturn = responseReturn.data?.rows?.[0]?.elements?.[0];
+        if (elementReturn && elementReturn.status === "OK") {
+          total_km_count += elementReturn.distance.value / 1000;
+        }
       }
 
       total_km_count = Math.round(total_km_count);
-      console.log(`✅ Total Round Trip Distance: ${total_km_count} km`);
-    }
-
-    /** ===== Build Query ===== **/
-    const query = { status: true, trip_type: trip_type.trim() };
-
-    if (trip_type === "Oneway" || trip_type === "Round Trip") {
-      query.from = new RegExp(`^${from.trim()}$`, "i");
-
-      if (Array.isArray(to) && to.length > 0) {
-        query.$or = to.map((dest) => ({ to: new RegExp(`^${dest.trim()}$`, "i") }));
-      } else {
-        query.to = new RegExp(`^${to.trim()}$`, "i");
-      }
     } else if (trip_type === "Local Rental Trip") {
-      query.city = new RegExp(`^${city.trim()}$`, "i");
+      const query = { 
+        status: true, 
+        trip_type: "Local Rental Trip", 
+        city: new RegExp(`^${city.trim()}$`, "i") 
+      };
+      const trip = await Trip.findOne(query).lean();
+      if (trip) tripsFound.push(trip);
     }
 
-    /** ===== Find Trip ===== **/
-    const trip = await Trip.findOne(query).lean();
+    /** ===== Merge vehicles and calculate prices ===== **/
     let vehicles = [];
-    let is_result_found = false;
-
+    let is_result_found = tripsFound.length > 0;
     let upto_km = null;
     let fix_price_per_day = 0;
     let per_km_price = 0;
     let per_hour_price = 0;
     let final_price = 0;
 
-    if (trip) {
-      console.log("✅ Trip found:", trip._id);
-
-      if (trip.vehicleIds && trip.vehicleIds.length > 0) {
-        vehicles = await Vehicle.find({
-          vehicle_type: { $in: trip.vehicleIds },
-          status: true,
-        })
-          .populate("vehicle_type")
-          .lean();
-
-        console.log("🚗 Vehicles found:", vehicles.length);
+    if (is_result_found) {
+      for (const trip of tripsFound) {
+        if (trip.vehicleIds && trip.vehicleIds.length > 0) {
+          const vList = await Vehicle.find({ vehicle_type: { $in: trip.vehicleIds }, status: true })
+            .populate("vehicle_type")
+            .lean();
+          vehicles = vehicles.concat(vList);
+        }
       }
-      is_result_found = true;
-    } else {
-      console.log("⚠️ No trip found for query:", query);
-    }
 
-    /** ===== Calculate Prices ===== **/
-    if (vehicles.length > 0) {
+      // Remove duplicate vehicles
+      vehicles = vehicles.filter((v, i, arr) => arr.findIndex(a => a._id.toString() === v._id.toString()) === i);
+
+      // Calculate prices for first trip (can be adjusted for multiple trips if needed)
+      const firstTrip = tripsFound[0];
       outerLoop: for (const v of vehicles) {
         if (!v.vehicle_type?.states?.length) continue;
 
@@ -129,36 +339,22 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
           for (const cityData of state.cities) {
             const cityName = cityData?.city_name;
 
-            // 🟢 Local Rental Trip Logic
             if (trip_type === "Local Rental Trip") {
               if (cityName && city && cityName.toLowerCase() === city.toLowerCase()) {
                 per_hour_price = cityData.per_hour_price || 0;
                 fix_price_per_day = cityData.fix_price_per_day || 0;
                 final_price = per_hour_price;
-                console.log(`🏙️ Local city match: ${cityName}`);
                 break outerLoop;
               }
-            }
-
-            // 🟢 Oneway / Round Trip Logic
-            if (trip_type === "Oneway" || trip_type === "Round Trip") {
+            } else {
               if (cityName && from && cityName.toLowerCase() === from.toLowerCase()) {
                 upto_km = cityData.upto_km || 0;
                 fix_price_per_day = cityData.fix_price_per_day || 0;
                 per_km_price = cityData.per_km_price || 0;
 
-                const totalKmUsed =
-                  trip_type === "Round Trip" ? total_km_count : trip?.totalKm || 0;
-
-                if (totalKmUsed <= upto_km) {
-                  final_price = fix_price_per_day;
-                } else {
-                  const extraKm = totalKmUsed - upto_km;
-                  final_price = fix_price_per_day + extraKm * per_km_price;
-                }
-
-                console.log(`✅ City match: ${cityName}`);
-                console.log(`💰 Final Price: ${final_price}`);
+                const totalKmUsed = trip_type === "Round Trip" ? total_km_count : firstTrip.totalKm || 0;
+                if (totalKmUsed <= upto_km) final_price = fix_price_per_day;
+                else final_price = fix_price_per_day + (totalKmUsed - upto_km) * per_km_price;
                 break outerLoop;
               }
             }
@@ -176,11 +372,11 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
       city,
       pickup_date,
       pickup_time,
-      tripId: trip ? trip._id : null,
-      totalKm: trip ? trip.totalKm : null,
-      total_km_count: total_km_count || null, // ✅ for round trip
-      duration: trip ? trip.duration : null,
-      vehicleIds: vehicles.map((v) => v._id),
+      tripId: tripsFound[0]?._id || null,
+      totalKm: tripsFound[0]?.totalKm || null,
+      total_km_count: total_km_count || null,
+      duration: tripsFound[0]?.duration || null,
+      vehicleIds: vehicles.map(v => v._id),
       is_result_found,
       upto_km,
       fix_price_per_day,
@@ -190,15 +386,14 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
     });
 
     await exploreData.save();
-    console.log("💾 ExploreCabs saved successfully:", exploreData._id);
 
     /** ===== Response ===== **/
     const responseData = {
-      trip,
+      trips: tripsFound,
       vehicles,
       exploreId: exploreData._id,
       total_km_count: total_km_count || 0,
-      total_km: trip ? trip.totalKm : 0,
+      total_km: tripsFound[0]?.totalKm || 0,
       upto_km,
       fix_price_per_day,
       per_km_price,
@@ -211,15 +406,12 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
       responseData,
       res
     );
+
   } catch (err) {
     console.error("🔥 Error in explorweCabsGetAvailableVehicles:", err);
     return responseManager.onError(err, res);
   }
 };
-
-
-
-
 
 
 
@@ -690,7 +882,7 @@ exports.createTravelDetails = async (req, res) => {
       servicesFullData = await SpecialServices.find({ _id: { $in: serviceIds }, status: true }).lean();
 
 
-      console.log("servicesFullData:",servicesFullData)
+      console.log("servicesFullData:", servicesFullData)
       totalServicePrice = servicesFullData.reduce((sum, s) => sum + (s.amount || 0), 0);
     }
 

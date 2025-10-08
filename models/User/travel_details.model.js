@@ -11,7 +11,11 @@ const travelDetailsSchema = new Schema({
         required: true
     },
     from: { type: String },
-    to: { type: String },
+  to: {
+  type: [String], // Accepts array of strings
+  required: true
+},
+
     city: { type: String },
 
     routes: [
