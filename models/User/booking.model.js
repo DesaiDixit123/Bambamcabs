@@ -22,7 +22,7 @@ const bookingSchema = new Schema({
     total_payment: { type: Number },                           // optional
     razorpay_payment: { type: Object },                        // store full Razorpay payment object if needed
     booking_id: { type: String, unique: true },
-
+      pending_payment: { type: Number }, 
     // System
     booking_status: { type: String, enum: ["Confirmed", "Cancelled"], default: "Confirmed" },
     createdAt: { type: Date, default: Date.now },

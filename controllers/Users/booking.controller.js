@@ -11,215 +11,6 @@ const SpecialServices = require("../../models/Admin/Master/Special_Services.mode
 const ExploreCabs = require("../../models/User/exploreCabs.model");
 const Booking = require("../../models/User/booking.model");
 
-
-// exports.explorweCabsGetAvailableVehicles = async (req, res) => {
-//   try {
-//     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
-//     res.setHeader("Access-Control-Allow-Origin", "*");
-
-//     // 🔒 Authentication
-//     if (!(req.user && mongoose.Types.ObjectId.isValid(req.user._id))) {
-//       return responseManager.unauthorisedRequest(res);
-//     }
-
-//     const { from, to, pickup_date, pickup_time, trip_type, city } = req.body;
-
-//     /** ===== Validation ===== **/
-//     if (!trip_type)
-//       return responseManager.badrequest({ message: "Trip type is required" }, res);
-
-//     if ((trip_type === "Oneway" || trip_type === "Round Trip") && (!from || !to))
-//       return responseManager.badrequest({ message: "From & To required" }, res);
-
-//     if (trip_type === "Local Rental Trip" && !city)
-//       return responseManager.badrequest({ message: "City required for local rental trip" }, res);
-
-//     if (!pickup_date || !pickup_time)
-//       return responseManager.badrequest({ message: "Pickup date & time required" }, res);
-
-//     /** ===== Handle Multi-location Round Trip ===== **/
-//     let total_km_count = 0;
-
-//     if (trip_type === "Round Trip") {
-//       const apiKey = "EbB1WBtNMWSaC4nq5A6wQgudF8rp5MKHt8IZ4iQFouwtANcDhhXIkp6rDT39PkIk";
-//       const toArray = Array.isArray(to) ? to : [to]; // ensure array
-
-//       const allPoints = [from, ...toArray, from]; // return back to origin
-//       console.log("🗺️ Route Points:", allPoints);
-
-//       for (let i = 0; i < allPoints.length - 1; i++) {
-//         const origin = allPoints[i];
-//         const destination = allPoints[i + 1];
-
-//         const url = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${encodeURIComponent(
-//           origin
-//         )}&destinations=${encodeURIComponent(destination)}&key=${apiKey}`;
-
-//         const response = await axios.get(url);
-//         const element = response.data?.rows?.[0]?.elements?.[0];
-
-//         if (!element || element.status !== "OK") {
-//           console.warn(`⚠️ Distance API failed for ${origin} → ${destination}`);
-//           continue;
-//         }
-
-//         const distanceMeters = element.distance.value;
-//         const distanceKm = distanceMeters / 1000;
-//         total_km_count += distanceKm;
-
-//         console.log(`🛣️ ${origin} → ${destination} = ${distanceKm.toFixed(2)} km`);
-//       }
-
-//       total_km_count = Math.round(total_km_count);
-//       console.log(`✅ Total Round Trip Distance: ${total_km_count} km`);
-//     }
-
-//     /** ===== Build Query ===== **/
-//     const query = { status: true, trip_type: trip_type.trim() };
-
-//     if (trip_type === "Oneway" || trip_type === "Round Trip") {
-//       query.from = new RegExp(`^${from.trim()}$`, "i");
-
-//       if (Array.isArray(to) && to.length > 0) {
-//         query.$or = to.map((dest) => ({ to: new RegExp(`^${dest.trim()}$`, "i") }));
-//       } else {
-//         query.to = new RegExp(`^${to.trim()}$`, "i");
-//       }
-//     } else if (trip_type === "Local Rental Trip") {
-//       query.city = new RegExp(`^${city.trim()}$`, "i");
-//     }
-
-//     /** ===== Find Trip ===== **/
-//     const trip = await Trip.findOne(query).lean();
-//     let vehicles = [];
-//     let is_result_found = false;
-
-//     let upto_km = null;
-//     let fix_price_per_day = 0;
-//     let per_km_price = 0;
-//     let per_hour_price = 0;
-//     let final_price = 0;
-
-//     if (trip) {
-//       console.log("✅ Trip found:", trip._id);
-
-//       if (trip.vehicleIds && trip.vehicleIds.length > 0) {
-//         vehicles = await Vehicle.find({
-//           vehicle_type: { $in: trip.vehicleIds },
-//           status: true,
-//         })
-//           .populate("vehicle_type")
-//           .lean();
-
-//         console.log("🚗 Vehicles found:", vehicles.length);
-//       }
-//       is_result_found = true;
-//     } else {
-//       console.log("⚠️ No trip found for query:", query);
-//     }
-
-//     /** ===== Calculate Prices ===== **/
-//     if (vehicles.length > 0) {
-//       outerLoop: for (const v of vehicles) {
-//         if (!v.vehicle_type?.states?.length) continue;
-
-//         for (const state of v.vehicle_type.states) {
-//           if (!Array.isArray(state.cities)) continue;
-
-//           for (const cityData of state.cities) {
-//             const cityName = cityData?.city_name;
-
-//             // 🟢 Local Rental Trip Logic
-//             if (trip_type === "Local Rental Trip") {
-//               if (cityName && city && cityName.toLowerCase() === city.toLowerCase()) {
-//                 per_hour_price = cityData.per_hour_price || 0;
-//                 fix_price_per_day = cityData.fix_price_per_day || 0;
-//                 final_price = per_hour_price;
-//                 console.log(`🏙️ Local city match: ${cityName}`);
-//                 break outerLoop;
-//               }
-//             }
-
-//             // 🟢 Oneway / Round Trip Logic
-//             if (trip_type === "Oneway" || trip_type === "Round Trip") {
-//               if (cityName && from && cityName.toLowerCase() === from.toLowerCase()) {
-//                 upto_km = cityData.upto_km || 0;
-//                 fix_price_per_day = cityData.fix_price_per_day || 0;
-//                 per_km_price = cityData.per_km_price || 0;
-
-//                 const totalKmUsed =
-//                   trip_type === "Round Trip" ? total_km_count : trip?.totalKm || 0;
-
-//                 if (totalKmUsed <= upto_km) {
-//                   final_price = fix_price_per_day;
-//                 } else {
-//                   const extraKm = totalKmUsed - upto_km;
-//                   final_price = fix_price_per_day + extraKm * per_km_price;
-//                 }
-
-//                 console.log(`✅ City match: ${cityName}`);
-//                 console.log(`💰 Final Price: ${final_price}`);
-//                 break outerLoop;
-//               }
-//             }
-//           }
-//         }
-//       }
-//     }
-
-//     /** ===== Save Explore Data ===== **/
-//     const exploreData = new ExploreCabs({
-//       userId: req.user._id,
-//       trip_type,
-//       from,
-//       to: Array.isArray(to) ? to : [to],
-//       city,
-//       pickup_date,
-//       pickup_time,
-//       tripId: trip ? trip._id : null,
-//       totalKm: trip ? trip.totalKm : null,
-//       total_km_count: total_km_count || null, // ✅ for round trip
-//       duration: trip ? trip.duration : null,
-//       vehicleIds: vehicles.map((v) => v._id),
-//       is_result_found,
-//       upto_km,
-//       fix_price_per_day,
-//       per_km_price,
-//       per_hour_price,
-//       final_price,
-//     });
-
-//     await exploreData.save();
-//     console.log("💾 ExploreCabs saved successfully:", exploreData._id);
-
-//     /** ===== Response ===== **/
-//     const responseData = {
-//       trip,
-//       vehicles,
-//       exploreId: exploreData._id,
-//       total_km_count: total_km_count || 0,
-//       total_km: trip ? trip.totalKm : 0,
-//       upto_km,
-//       fix_price_per_day,
-//       per_km_price,
-//       per_hour_price,
-//       final_price,
-//     };
-
-//     return responseManager.onSuccess(
-//       `${trip_type} trip ${is_result_found ? "found" : "not found"}`,
-//       responseData,
-//       res
-//     );
-//   } catch (err) {
-//     console.error("🔥 Error in explorweCabsGetAvailableVehicles:", err);
-//     return responseManager.onError(err, res);
-//   }
-// };
-
-
-
-
 exports.explorweCabsGetAvailableVehicles = async (req, res) => {
   try {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
@@ -230,7 +21,7 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
       return responseManager.unauthorisedRequest(res);
     }
 
-    const { from, to, pickup_date, pickup_time, trip_type, city } = req.body;
+    const { from, to, pickup_date, pickup_time, trip_type, city ,return_date} = req.body;
 
     /** ===== Validation ===== **/
     if (!trip_type) return responseManager.badrequest({ message: "Trip type is required" }, res);
@@ -249,7 +40,7 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
 
     if (!pickup_date || !pickup_time) return responseManager.badrequest({ message: "Pickup date & time required" }, res);
 
-    /** ===== Find Trips ===== **/
+     /** ===== Find Trips ===== **/
     let tripsFound = [];
     let total_km_count = 0;
 
@@ -262,31 +53,37 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
       };
       const trip = await Trip.findOne(query).lean();
       if (trip) tripsFound.push(trip);
+
     } else if (trip_type === "Round Trip") {
       const apiKey = "EbB1WBtNMWSaC4nq5A6wQgudF8rp5MKHt8IZ4iQFouwtANcDhhXIkp6rDT39PkIk";
 
-      for (const destination of to) {
-        const query = { 
-          status: true, 
-          trip_type: "Round Trip", 
-          from: new RegExp(`^${from.trim()}$`, "i"), 
-          to: new RegExp(`^${destination.trim()}$`, "i") 
-        };
-        const trip = await Trip.findOne(query).lean();
-        if (trip) tripsFound.push(trip);
+      // ✅ Use only last destination for trip check
+      const lastDestination = to[to.length - 1];
 
-        // Calculate distance for this segment
-        const url = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${encodeURIComponent(from)}&destinations=${encodeURIComponent(destination)}&key=${apiKey}`;
+      const tripQuery = { 
+        status: true, 
+        trip_type: "Round Trip", 
+        from: new RegExp(`^${from.trim()}$`, "i"), 
+        to: new RegExp(`^${lastDestination.trim()}$`, "i") 
+      };
+
+      const trip = await Trip.findOne(tripQuery).lean();
+      if (trip) tripsFound.push(trip);
+
+      // ✅ Calculate total distance for all segments
+      let previousPoint = from;
+      for (const destination of to) {
+        const url = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${encodeURIComponent(previousPoint)}&destinations=${encodeURIComponent(destination)}&key=${apiKey}`;
         const response = await axios.get(url);
         const element = response.data?.rows?.[0]?.elements?.[0];
         if (element && element.status === "OK") {
           total_km_count += element.distance.value / 1000;
         }
+        previousPoint = destination;
       }
 
-      // Add return trip distance (last destination → from)
-      if (to.length > 0) {
-        const lastDestination = to[to.length - 1];
+      // ✅ Add return trip distance (last destination → from)
+      if (lastDestination) {
         const urlReturn = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${encodeURIComponent(lastDestination)}&destinations=${encodeURIComponent(from)}&key=${apiKey}`;
         const responseReturn = await axios.get(urlReturn);
         const elementReturn = responseReturn.data?.rows?.[0]?.elements?.[0];
@@ -296,7 +93,8 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
       }
 
       total_km_count = Math.round(total_km_count);
-    } else if (trip_type === "Local Rental Trip") {
+    } 
+    else if (trip_type === "Local Rental Trip") {
       const query = { 
         status: true, 
         trip_type: "Local Rental Trip", 
@@ -305,6 +103,7 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
       const trip = await Trip.findOne(query).lean();
       if (trip) tripsFound.push(trip);
     }
+
 
     /** ===== Merge vehicles and calculate prices ===== **/
     let vehicles = [];
@@ -371,6 +170,7 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
       to: Array.isArray(to) ? to : [to],
       city,
       pickup_date,
+      return_date,
       pickup_time,
       tripId: tripsFound[0]?._id || null,
       totalKm: tripsFound[0]?.totalKm || null,
@@ -399,6 +199,8 @@ exports.explorweCabsGetAvailableVehicles = async (req, res) => {
       per_km_price,
       per_hour_price,
       final_price,
+      return_date
+   
     };
 
     return responseManager.onSuccess(
@@ -691,135 +493,6 @@ exports.selectVehicle = async (req, res) => {
     return responseManager.onError(err, res);
   }
 };
-// exports.createBooking = async (req, res) => {
-//   try {
-//     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
-//     res.setHeader("Access-Control-Allow-Origin", "*");
-
-//     // 🔒 User authentication check
-//     if (!(req.user && mongoose.Types.ObjectId.isValid(req.user._id))) {
-//       return responseManager.unauthorisedRequest(res);
-//     }
-
-//     const {
-//       trip_type,
-//       from,
-//       to,
-//       city,
-//       date,
-//       pickup_time,
-//       vehicleId,
-//       pickup_address,
-//       drop_address,
-//       traveler_name,
-//       traveler_email,
-//       traveler_mobile,
-//       special_services,
-//       offers_id,
-//       exploreId
-//     } = req.body;
-
-//     /** ===== Validation ===== **/
-//     if (!trip_type) return responseManager.badrequest({ message: "Trip type required" }, res);
-//     if (!date || !pickup_time) return responseManager.badrequest({ message: "Pickup date & time required" }, res);
-//     if (!vehicleId) return responseManager.badrequest({ message: "Vehicle required" }, res);
-//     if (!pickup_address || !traveler_name || !traveler_email || !traveler_mobile) {
-//       return responseManager.badrequest({ message: "Traveler details missing" }, res);
-//     }
-//     if (!exploreId || !mongoose.Types.ObjectId.isValid(exploreId)) {
-//       return responseManager.badrequest({ message: "Explore ID is missing or invalid" }, res);
-//     }
-
-//     /** ===== Find Trip ===== **/
-//     let query = { status: true, trip_type: trip_type };
-//     if (trip_type === "Oneway" || trip_type === "Round Trip") {
-//       query.from = new RegExp(`^${from.trim()}$`, "i");
-//       query.to = new RegExp(`^${to.trim()}$`, "i");
-//     } else if (trip_type === "Local Rental Trip") {
-//       query.city = new RegExp(`^${city.trim()}$`, "i");
-//     }
-
-//     const trip = await Trip.findOne(query).lean();
-//     if (!trip) return responseManager.badrequest({ message: "No trip found for this route" }, res);
-
-//     /** ===== Vehicle ===== **/
-//     const vehicle = await Vehicle.findById(vehicleId).lean();
-//     if (!vehicle) return responseManager.badrequest({ message: "Invalid vehicle" }, res);
-
-//     /** ===== Explore Data ===== **/
-//     const exploreData = await Explore.findById(exploreId).lean();
-//     if (!exploreData) return responseManager.badrequest({ message: "Invalid Explore ID" }, res);
-
-//     const baseFare = Number(exploreData.fix_price_per_day) || 0;
-//     const kmIncluded = Number(exploreData.totalkm) || 0;
-
-//     /** ===== Special Services ===== **/
-//     let servicesFullData = [];
-//     let serviceIds = [];
-
-//     if (special_services && special_services.length > 0) {
-//       serviceIds = special_services.map(s => s.service_id || s);
-//       servicesFullData = await SpecialServices.find({ _id: { $in: serviceIds }, status: true }).lean();
-//     }
-
-//     /** ===== Offer Apply ===== **/
-//     let appliedOffer = null;
-//     if (offers_id && mongoose.Types.ObjectId.isValid(offers_id)) {
-//       appliedOffer = await Offer.findById(offers_id).lean();
-//     }
-
-//     /** ===== Generate Unique Booking ID ===== **/
-//     const generateBookingId = () => {
-//       const prefix = "BBM";
-//       const timestamp = Date.now().toString().slice(-6); // last 6 digits
-//       const random = Math.floor(1000 + Math.random() * 9000); // random 4 digits
-//       return `${prefix}${timestamp}${random}`;
-//     };
-
-//     /** ===== Save Booking ===== **/
-//     const travelDetailsData = {
-//       userId: req.user._id,
-//       trip_type,
-//       booking_id: generateBookingId(),
-//       from,
-//       to,
-//       city,
-//       date,
-//       pickup_time,
-//       vehicleId,
-//       vehicleName: vehicle.name,
-//       exploreId,
-//       base_fare: baseFare,
-//       km_included: kmIncluded,
-//       pickup_address,
-//       drop_address,
-//       traveler_name,
-//       traveler_email,
-//       traveler_mobile,
-//       offers_id: appliedOffer ? appliedOffer._id : null,
-//       special_services: serviceIds,
-//       booking_status: "Confirmed"
-//     };
-
-//     const booking = new Booking(travelDetailsData);
-//     await booking.save();
-
-//     /** ===== Response ===== **/
-//     return responseManager.onSuccess("Your car booking is confirmed!", {
-//       booking,
-//       vehicle,
-//       offer: appliedOffer,
-//       special_services: servicesFullData,
-//       explore: exploreData
-//     }, res);
-
-//   } catch (err) {
-//     console.error("Error in createBooking:", err);
-//     return responseManager.onError(err, res);
-//   }
-// };
-
-
 
 
 exports.createTravelDetails = async (req, res) => {
@@ -838,10 +511,11 @@ exports.createTravelDetails = async (req, res) => {
       to,
       city,
       date,
+      return_date, // for Round Trip
       pickup_time,
       vehicleId,
       pickup_address,
-      drop_address,
+      drop_address, // string or array
       traveler_name,
       traveler_email,
       traveler_mobile,
@@ -858,7 +532,7 @@ exports.createTravelDetails = async (req, res) => {
       return responseManager.badrequest({ message: "Traveler details missing" }, res);
     }
     if (!exploreId || !mongoose.Types.ObjectId.isValid(exploreId)) {
-      return responseManager.badrequest({ message: "Explore ID is missing or invalid" }, res);
+      return responseManager.badrequest({ message: "Explore ID missing or invalid" }, res);
     }
 
     /** ===== Vehicle & Explore Data ===== **/
@@ -880,36 +554,77 @@ exports.createTravelDetails = async (req, res) => {
     if (special_services && special_services.length > 0) {
       serviceIds = special_services.map(s => s.service_id || s);
       servicesFullData = await SpecialServices.find({ _id: { $in: serviceIds }, status: true }).lean();
-
-
-      console.log("servicesFullData:", servicesFullData)
       totalServicePrice = servicesFullData.reduce((sum, s) => sum + (s.amount || 0), 0);
     }
 
-    /** ===== DistanceMatrix API Call ===== **/
-    let actualDistanceKm = 0;
-    try {
-      const apiKey = 'EbB1WBtNMWSaC4nq5A6wQgudF8rp5MKHt8IZ4iQFouwtANcDhhXIkp6rDT39PkIk'; // replace with your API key
-      const url = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${encodeURIComponent(pickup_address)}&destinations=${encodeURIComponent(drop_address)}&key=${apiKey}`;
-      const response = await axios.get(url);
+  /** ===== Distance Calculation (multi-drop supported with local buffer) ===== **/
+let actualDistanceKm = 0;
+let localBufferPerCity = 25; // add 25 km per city for inner travel
+try {
+  const apiKey = 'EbB1WBtNMWSaC4nq5A6wQgudF8rp5MKHt8IZ4iQFouwtANcDhhXIkp6rDT39PkIk';
+  const allStops = [pickup_address, ...(Array.isArray(drop_address) ? drop_address : [drop_address])];
 
-      if (
-        response.data &&
-        response.data.rows &&
-        response.data.rows[0].elements &&
-        response.data.rows[0].elements[0].status === 'OK'
-      ) {
-        actualDistanceKm = response.data.rows[0].elements[0].distance.value / 1000;
-      } else {
-        console.warn("DistanceMatrix API returned invalid data:", response.data);
+  for (let i = 0; i < allStops.length - 1; i++) {
+    const origin = encodeURIComponent(allStops[i]);
+    const destination = encodeURIComponent(allStops[i + 1]);
+    const url = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${origin}&destinations=${destination}&key=${apiKey}`;
+    const response = await axios.get(url);
+
+    if (
+      response.data &&
+      response.data.rows &&
+      response.data.rows[0].elements &&
+      response.data.rows[0].elements[0].status === 'OK'
+    ) {
+      actualDistanceKm += response.data.rows[0].elements[0].distance.value / 1000;
+    }
+  }
+
+  if (trip_type === "Round Trip") {
+    const lastDrop = encodeURIComponent(allStops[allStops.length - 1]);
+    const backUrl = `https://api.distancematrix.ai/maps/api/distancematrix/json?origins=${lastDrop}&destinations=${encodeURIComponent(pickup_address)}&key=${apiKey}`;
+    const backResponse = await axios.get(backUrl);
+    if (
+      backResponse.data &&
+      backResponse.data.rows &&
+      backResponse.data.rows[0].elements &&
+      backResponse.data.rows[0].elements[0].status === 'OK'
+    ) {
+      actualDistanceKm += backResponse.data.rows[0].elements[0].distance.value / 1000;
+    }
+  }
+
+  // add local city buffer km
+  const bufferKm = (Array.isArray(drop_address) ? drop_address.length : 1) * localBufferPerCity;
+  actualDistanceKm += bufferKm;
+
+} catch (err) {
+  console.error("DistanceMatrix API error:", err);
+}
+
+
+    /** ===== Price Calculation ===== **/
+    let totalDays = 1;
+    let basePrice = fix_price_per_day;
+    let totalUptoKm = upto_km;
+    let extraKm = 0;
+
+    if (trip_type === "Round Trip") {
+      // if return_date is same → 1-day trip
+      if (return_date) {
+        const pickupDate = new Date(date);
+        const returnDate = new Date(return_date);
+        const diffTime = returnDate - pickupDate;
+        const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        totalDays = days > 0 ? days + 1 : 1; // include pickup day
       }
-    } catch (err) {
-      console.error("DistanceMatrix API error:", err);
+
+      basePrice = fix_price_per_day * totalDays;
+      totalUptoKm = upto_km * totalDays;
     }
 
-    /** ===== Calculate Extra KM & Base Price ===== **/
-    const extraKm = Math.max(0, actualDistanceKm - upto_km);
-    let basePrice = fix_price_per_day + extraKm * per_km_price + totalServicePrice;
+    extraKm = Math.max(0, actualDistanceKm - totalUptoKm);
+    const totalBasePrice = basePrice + (extraKm * per_km_price) + totalServicePrice;
 
     /** ===== Offer Handling ===== **/
     let appliedOffer = null;
@@ -917,10 +632,9 @@ exports.createTravelDetails = async (req, res) => {
 
     if (offers_id && mongoose.Types.ObjectId.isValid(offers_id)) {
       appliedOffer = await Offer.findById(offers_id).lean();
-
       if (appliedOffer && appliedOffer.discount_value) {
         if (appliedOffer.discount_type === "%") {
-          offerDiscount = (basePrice * Number(appliedOffer.discount_value)) / 100;
+          offerDiscount = (totalBasePrice * Number(appliedOffer.discount_value)) / 100;
         } else {
           offerDiscount = Number(appliedOffer.discount_value);
         }
@@ -928,7 +642,7 @@ exports.createTravelDetails = async (req, res) => {
     }
 
     /** ===== Final Price ===== **/
-    let final_price = Math.max(0, basePrice - offerDiscount);
+    const final_price = Math.max(0, totalBasePrice - offerDiscount);
 
     /** ===== Generate Booking ID ===== **/
     const generateBookingId = () => {
@@ -947,6 +661,7 @@ exports.createTravelDetails = async (req, res) => {
       to,
       city,
       date,
+      return_date: return_date || null,
       pickup_time,
       vehicleId,
       vehicleName: vehicle.name,
@@ -956,6 +671,8 @@ exports.createTravelDetails = async (req, res) => {
       pickup_address,
       drop_address,
       actual_distance_km: actualDistanceKm,
+      total_days: totalDays,
+      extra_km: extraKm,
       final_price,
       traveler_name,
       traveler_email,
@@ -965,28 +682,30 @@ exports.createTravelDetails = async (req, res) => {
       booking_status: "Confirmed"
     };
 
-    const travel_deatils = new TravelDetails(travelDetailsData);
-    await travel_deatils.save();
+    const travel_details = new TravelDetails(travelDetailsData);
+    await travel_details.save();
 
     /** ===== Response ===== **/
     return responseManager.onSuccess("Travel Details Saved", {
-      travel_deatils,
+       _id: travel_details._id,   
+      travel_details,
       vehicle,
       offer: appliedOffer,
       special_services: servicesFullData,
       explore: exploreData,
       actual_distance_km: actualDistanceKm,
       total_service_price: totalServicePrice,
+      total_days: totalDays,
+      extra_km: extraKm,
       offer_discount: offerDiscount,
       final_price
     }, res);
 
   } catch (err) {
-    console.error("Error in createBooking:", err);
+    console.error("Error in createTravelDetails:", err);
     return responseManager.onError(err, res);
   }
 };
-
 exports.createBookingFromTravelDetails = async (req, res) => {
   try {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
@@ -996,11 +715,12 @@ exports.createBookingFromTravelDetails = async (req, res) => {
       travelDetailsId,
       company_name,
       gst_no,
+      is_gst,
       payment_type,
       payment_id,
       sub_total_payment,
       total_payment,
-      razorpay_payment
+      razorpay_payment // 🔹 only amount (number)
     } = req.body;
 
     // 🔒 Authentication
@@ -1008,7 +728,7 @@ exports.createBookingFromTravelDetails = async (req, res) => {
       return responseManager.unauthorisedRequest(res);
     }
 
-    // 🔹 Validation
+    // 🔹 Validate travelDetailsId
     if (!travelDetailsId || !mongoose.Types.ObjectId.isValid(travelDetailsId)) {
       return responseManager.badrequest({ message: "Valid travelDetailsId is required" }, res);
     }
@@ -1029,14 +749,22 @@ exports.createBookingFromTravelDetails = async (req, res) => {
       }
     }
 
-    // 🔹 Validate payment_type & payment_id
+    // 🔹 Determine payment type & mode
     const paymentType = payment_type !== undefined ? payment_type : travelDetails.payment_type || 0;
+    const paymentMode = paymentType === 1 ? "Online" : "Cash";
+
+    // 🔹 Validation for online payments
     if (paymentType === 1 && !payment_id) {
       return responseManager.badrequest({ message: "Payment ID is required for online payments" }, res);
     }
 
-    // 🔹 Set payment_mode automatically
-    const paymentMode = paymentType === 1 ? "Online" : "Cash";
+    // ✅ Handle payment calculations
+    const subTotal = sub_total_payment || 0;
+    const totalPayment = total_payment || 0;
+    const paidAmount = paymentType === 1 ? (razorpay_payment || 0) : 0;
+
+    // 🧮 Calculate pending amount
+    const pendingPayment = totalPayment - paidAmount;
 
     /** ===== Generate Unique Booking ID ===== **/
     const generateBookingId = async () => {
@@ -1049,15 +777,17 @@ exports.createBookingFromTravelDetails = async (req, res) => {
     /** ===== Save Booking ===== **/
     const bookingData = new Booking({
       userId: req.user._id,
+      is_gst,
       travelDetailsId: travelDetails._id,
       company_name: company_name || travelDetails.company_name || "",
       gst_no: gst_no || travelDetails.gst_no || "",
       payment_mode: paymentMode,
       payment_type: paymentType,
       payment_id: payment_id || travelDetails.payment_id || "",
-      sub_total_payment: paymentType === 1 ? sub_total_payment || 0 : 0,
-      total_payment: paymentType === 1 ? total_payment || 0 : 0,
-      razorpay_payment: paymentType === 1 ? razorpay_payment || {} : {},
+      sub_total_payment: subTotal,
+      total_payment: totalPayment,
+      razorpay_payment: paidAmount,       // ✅ only amount
+      pending_payment: pendingPayment,    // ✅ calculated pending amount
       booking_id: await generateBookingId(),
       booking_status: "Confirmed"
     });
@@ -1066,7 +796,20 @@ exports.createBookingFromTravelDetails = async (req, res) => {
 
     /** ===== Response ===== **/
     return responseManager.onSuccess("Booking created successfully!", {
-      booking,
+      _id: booking._id,
+      is_gst,
+      booking_id: booking.booking_id,
+      travelDetailsId: travelDetails._id,
+      payment_mode: booking.payment_mode,
+      payment_type: booking.payment_type,
+      payment_id: booking.payment_id,
+      sub_total_payment: booking.sub_total_payment,
+      total_payment: booking.total_payment,
+      razorpay_payment: booking.razorpay_payment,
+      pending_payment: booking.pending_payment, // ✅ included in response
+      booking_status: booking.booking_status,
+      company_name: booking.company_name,
+      gst_no: booking.gst_no,
       travelDetails
     }, res);
 

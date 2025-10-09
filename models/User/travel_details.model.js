@@ -11,10 +11,11 @@ const travelDetailsSchema = new Schema({
         required: true
     },
     from: { type: String },
-  to: {
-  type: [String], // Accepts array of strings
-  required: true
-},
+    
+    to: {
+        type: [String], // Accepts array of strings
+        required: true
+    },
 
     city: { type: String },
 
@@ -36,7 +37,8 @@ const travelDetailsSchema = new Schema({
     exploreId: { type: Schema.Types.ObjectId, ref: "exploreCabs", required: true },
     // Travel Details
     pickup_address: { type: String, required: true },
-    drop_address: { type: String },
+  drop_address: { type: [String], default: [] },
+
     traveler_name: { type: String, required: true },
     traveler_email: { type: String, required: true },
     traveler_mobile: { type: String, required: true },
@@ -68,7 +70,7 @@ const travelDetailsSchema = new Schema({
 
     // System
     booking_status: { type: String, enum: ["Confirmed", "Cancelled"], default: "Confirmed" },
-       actual_distance_km: { type: Number, default: 0 },
+    actual_distance_km: { type: Number, default: 0 },
     total_service_price: { type: Number, default: 0 },
     offer_discount: { type: Number, default: 0 },
     final_price: { type: Number, default: 0 },
